@@ -1,0 +1,56 @@
+name: liquibase-refactoring
+
+networks:
+  db-network:
+    driver: bridge
+
+x-liquibase-common: &liquibase
+  image: liquibase:4.30
+  environment:
+    LIQUIBASE_SHOW_BANNER: false
+    LIQUIBASE_COMMAND_URL: jdbc:postgresql://postgresql:5432/postgres
+    LIQUIBASE_COMMAND_USERNAME: postgres
+    LIQUIBASE_COMMAND_PASSWORD: postgres
+    LIQUIBASE_SEARCH_PATH: /changelog
+    LIQUIBASE_COMMAND_CHANGELOG_FILE: changelog.yaml
+    LIQUIBASE_COMMAND_VERBOSE: true
+  networks:
+    - db-network
+
+services:
+  postgresql:
+    image: 'bitnami/postgresql:16'
+    environment:
+      POSTGRESQL_PASSWORD: postgres
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    networks:
+      - db-network
+
+  liquibase-before:
+    <<: *liquibase
+    volumes:
+      - ./before:/changelog
+    command: update
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    
+  liquibase-after:
+    <<: *liquibase
+    stdin_open: true
+    tty: true
+    command: bash
+    volumes:
+      - ./after:/changelog
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      liquibase-before:
+        condition: service_completed_successfully
+    
